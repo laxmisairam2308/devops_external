@@ -8,7 +8,9 @@ env:
   AWS_REGION: us-east-1
   IMAGE_TAG: master
   ECR_REGISTRY: kandula17
-  ECR_REPOSITORY: devops-external1
+  ECR_REPOSITORY: devops-external
+  EKS_CLUSTER_NAME: sree
+  DOCKERHUB_REPOSITORY_NAME : kandula17/devops-external
 
 jobs:
   build:
@@ -38,7 +40,46 @@ jobs:
         run: sudo echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
  
       - name: Build Docker image
-        run: sudo docker build -t kandula17/devops-external1:${{ env.IMAGE_TAG }} .
+        run: sudo docker build -t kandula17/devops-extenal:${{ env.IMAGE_TAG }} .
  
       - name: Push Docker image
-        run: sudo docker push kandula17/devops-external1:${{ env.IMAGE_TAG }}          
+        run: sudo docker push kandula17/devops-external:${{ env.IMAGE_TAG }}          
+
+  delpoy:
+
+    needs: [build]
+    runs-on: [self-hosted, dev]
+
+    steps:
+
+#      - name: Set up kubectl
+#        uses: aws-actions/setup-kubectl@v4
+#        with:
+#          version: 'latest' # Or a specific version like '1.28.0'
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Deploy to EKS using kubectl (Kustomize example)
+        run: |
+          sed -i "s|kandula17/devops-external|${{ env.DOCKERHUB_REPOSITORY_NAME }}|g" k8s/web.yaml
+          sed -i "s|master|${{ env.IMAGE_TAG }}|g" k8s/web.yaml
+          kubectl apply -f k8s/web.yaml
+
+
+
+
+
+#      - name: Build, tag, and push image to Amazon ECR
+#        id: build-image
+#        env:
+#          GIT_BRANCH: ${{ github.ref_name }}
+#        run: |
+#          # Build a docker container and
+#          # push it to ECR so that it can
+#          # be deployed to ECS.
+#          sudo echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+#          sudo docker build -t kandula17/devops-external:${{ env.GIT_BRANCH }} -f Dockerfile .
+#          sudo docker push kandula17/devops-external:${{ env.GIT_BRANCH }}
+#          sudo docker system prune --force --filter "until=24h"
